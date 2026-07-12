@@ -95,7 +95,7 @@ rag_bot/
 ### Шаг 0: Клонирование репозитория
 
 ```bash
-git clone https://github.com/MrGAN12009/prompt_rag_memory_system.git
+git clone https://github.com/BeastHealer/prompt_rag_memory_system.git
 cd prompt_rag_memory_system
 ```
 
