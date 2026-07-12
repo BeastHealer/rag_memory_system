@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Bot — Диалог</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <div class="header-left">
+                <h1>RAG Bot</h1>
+                <span class="provider-badge" id="providerBadge">{{ provider }}</span>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-secondary" id="statsBtn" title="Статистика">📊</button>
+                <button class="btn btn-secondary" id="testBtn" title="Проверить API">🔌</button>
+                <button class="btn btn-secondary" id="ingestBtn" title="Индексация документов">📥</button>
+                <button class="btn btn-secondary" id="clearBtn" title="Очистить историю">🧹</button>
+            </div>
+        </header>
+
+        <div class="status-bar" id="statusBar">
+            {% if is_loaded %}
+            <span class="status-ok">✅ База знаний загружена ({{ total_documents }} док.)</span>
+            {% else %}
+            <span class="status-warn">⚠️ База знаний не загружена — нажмите «📥» для индексации</span>
+            {% endif %}
+        </div>
+
+        <main class="chat-container" id="chatContainer">
+            <div class="message bot-message welcome-message">
+                <div class="message-content">
+                    <p>Здравствуйте! Я RAG-ассистент с доступом к базе знаний.</p>
+                    <p>Задайте вопрос — я найду релевантную информацию в документах и сформирую ответ.</p>
+                </div>
+            </div>
+        </main>
+
+        <footer class="input-area">
+            <form id="chatForm" class="input-form">
+                <textarea
+                    id="messageInput"
+                    placeholder="Введите ваш вопрос..."
+                    rows="1"
+                    autofocus
+                ></textarea>
+                <button type="submit" class="btn btn-primary" id="sendBtn">
+                    <span class="send-icon">➤</span>
+                </button>
+            </form>
+        </footer>
+    </div>
+
+    <div class="modal hidden" id="modal">
+        <div class="modal-content">
+            <button class="modal-close" id="modalClose">&times;</button>
+            <pre id="modalBody"></pre>
+        </div>
+    </div>
+
+    <script>
+        window.APP_CONFIG = {
+            provider: "{{ provider }}",
+            isLoaded: {{ "true" if is_loaded else "false" }}
+        };
+    </script>
+    <script src="/static/js/chat.js"></script>
+</body>
+</html>
