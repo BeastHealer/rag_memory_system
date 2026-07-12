@@ -95,8 +95,8 @@ rag_bot/
 ### Шаг 0: Клонирование репозитория
 
 ```bash
-git clone https://github.com/BeastHealer/prompt_rag_memory_system.git
-cd prompt_rag_memory_system
+git clone https://github.com/BeastHealer/rag_memory_system.git
+cd rag_memory_system
 ```
 
 ### Шаг 1: Установка зависимостей
