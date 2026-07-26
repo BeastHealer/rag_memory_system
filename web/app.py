@@ -34,9 +34,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+BASE_DIR = Path(__file__).resolve().parent
+
 app = FastAPI(title="RAG Bot", description="Диалоговый интерфейс RAG-бота")
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 rag_pipeline = RAGPipeline()
 conversation_history: Dict[str, List[dict]] = {}
@@ -51,36 +53,77 @@ class SessionRequest(BaseModel):
     session_id: str
 
 
-def chunk_text(text: str, max_chars: int = 6000) -> List[str]:
-    if len(text) <= max_chars:
-        return [text]
+def _split_sentences(paragraph: str) -> list[str]:
+    """Разбивает абзац на предложения по '. '."""
+    parts = paragraph.split(". ")
+    sentences = []
+    for i, part in enumerate(parts):
+        part = part.strip()
+        if not part:
+            continue
+        if i < len(parts) - 1 and not part.endswith((".", "!", "?")):
+            part += "."
+        sentences.append(part)
+    return sentences
 
-    chunks = []
-    current_chunk = []
-    current_length = 0
 
-    for paragraph in text.split("\n\n"):
-        paragraph_length = len(paragraph) + 2
-        if paragraph_length > max_chars:
-            for sentence in paragraph.split(". "):
-                sentence_length = len(sentence) + 2
-                if current_length + sentence_length > max_chars and current_chunk:
-                    chunks.append("\n\n".join(current_chunk))
-                    current_chunk = [sentence]
-                    current_length = sentence_length
-                else:
-                    current_chunk.append(sentence)
-                    current_length += sentence_length
-        elif current_length + paragraph_length > max_chars and current_chunk:
-            chunks.append("\n\n".join(current_chunk))
-            current_chunk = [paragraph]
-            current_length = paragraph_length
-        else:
-            current_chunk.append(paragraph)
-            current_length += paragraph_length
+def _overlap_sentences(sentences: list[str], overlap_ratio: float) -> list[str]:
+    """Берёт хвостовые предложения, покрывающие ~overlap_ratio длины чанка."""
+    if not sentences or overlap_ratio <= 0:
+        return []
+    chunk_text = " ".join(sentences)
+    target = int(len(chunk_text) * overlap_ratio)
+    if target <= 0:
+        return []
 
-    if current_chunk:
-        chunks.append("\n\n".join(current_chunk))
+    overlap: list[str] = []
+    overlap_len = 0
+    for sentence in reversed(sentences):
+        add = len(sentence) + (1 if overlap else 0)
+        if overlap and overlap_len + add > target:
+            break
+        overlap.insert(0, sentence)
+        overlap_len += add
+        if overlap_len >= target:
+            break
+    return overlap
+
+
+def smart_chunk_text(text: str, chunk_size: int = 500, overlap_ratio: float = 0.2) -> list[str]:
+    """
+    Умное разбиение на чанки:
+    1. Сначала по абзацам (\\n\\n)
+    2. Если абзац слишком длинный — по предложениям
+    3. Перекрытие (overlap) ~20% между соседними чанками длинного абзаца
+    """
+    chunks: list[str] = []
+
+    for para in text.split("\n\n"):
+        para = para.strip()
+        if not para:
+            continue
+
+        if len(para) <= chunk_size:
+            chunks.append(para)
+            continue
+
+        sentences = _split_sentences(para)
+        if not sentences:
+            chunks.append(para[:chunk_size])
+            continue
+
+        current: list[str] = []
+        for sentence in sentences:
+            prospective = " ".join(current + [sentence]) if current else sentence
+            if current and len(prospective) > chunk_size:
+                chunks.append(" ".join(current))
+                current = _overlap_sentences(current, overlap_ratio) + [sentence]
+            else:
+                current.append(sentence)
+
+        if current:
+            chunks.append(" ".join(current))
+
     return chunks
 
 
@@ -94,14 +137,15 @@ def load_documents_from_directory(directory: Path):
     for file_path in directory.glob("*.txt"):
         try:
             text = file_path.read_text(encoding="utf-8")
-            chunks = chunk_text(text)
-            if len(chunks) > 1:
-                for i, chunk in enumerate(chunks, 1):
-                    documents.append(chunk)
+            chunks = smart_chunk_text(text)
+            if not chunks:
+                continue
+            for i, chunk in enumerate(chunks, 1):
+                documents.append(chunk)
+                if len(chunks) == 1:
+                    sources.append(file_path.name)
+                else:
                     sources.append(f"{file_path.name} (часть {i}/{len(chunks)})")
-            else:
-                documents.append(text)
-                sources.append(file_path.name)
         except Exception as e:
             logger.error(f"Ошибка чтения {file_path}: {e}")
 
@@ -142,7 +186,7 @@ async def chat(req: ChatRequest):
     history.append({"role": "user", "content": req.message.strip()})
     history.append({"role": "assistant", "content": result["answer"]})
 
-    max_messages = MAX_HISTORY_LENGTH * 2
+    max_messages = MAX_HISTORY_LENGTH * 2  # до 10 пар = 20 сообщений
     if len(history) > max_messages:
         conversation_history[session_id] = history[-max_messages:]
 
@@ -151,6 +195,7 @@ async def chat(req: ChatRequest):
         "sources": result["sources"],
         "session_id": session_id,
         "model": result["model"],
+        "from_cache": result.get("from_cache", False),
     }
 
 

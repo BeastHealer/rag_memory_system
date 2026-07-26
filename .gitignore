@@ -51,6 +51,10 @@ metadata_*.json
 *.log
 logs/
 
+# SQLite cache (created at runtime)
+data/cache.db
+*.db
+
 # Temporary files
 *.tmp
 *.bak

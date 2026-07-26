@@ -131,6 +131,7 @@
             body: JSON.stringify({ session_id: sessionId }),
         });
         const data = await res.json();
+        chatContainer.innerHTML = "";
         showModal(`История очищена. Удалено сообщений: ${data.messages_removed}`);
     });
 
@@ -170,8 +171,11 @@
         text += `База знаний: ${data.is_loaded ? "загружена" : "не загружена"}\n`;
         text += `Документов: ${data.total_documents}\n`;
         text += `Векторов: ${data.total_vectors}\n`;
-        text += `Размерность: ${data.dimension}\n\n`;
-        text += `Модели:\n`;
+        text += `Размерность: ${data.dimension}\n`;
+        if (data.cached_queries !== undefined) {
+            text += `Кэш SQLite: ${data.cached_queries} запросов\n`;
+        }
+        text += `\nМодели:\n`;
         text += `  Чат: ${data.chat_model}\n`;
         text += `  Эмбеддинги: ${data.embed_model}\n`;
         if (data.api_url) text += `\nAPI URL: ${data.api_url}`;

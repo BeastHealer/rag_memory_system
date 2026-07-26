@@ -11,10 +11,14 @@ from config import (
     RAG_PROMPT_TEMPLATE,
     TOP_K_RESULTS,
     MAX_CONTEXT_LENGTH,
+    MAX_HISTORY_LENGTH,
+    CACHE_DB_PATH,
 )
 from rag.providers import get_provider
 from rag.vectorstore import FAISSVectorStore
 from rag.retriever import DocumentRetriever
+from rag.providers.cache import SQLiteCache
+
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +30,7 @@ class RAGPipeline:
         self.provider = get_provider(LLM_PROVIDER)
         self.vectorstore = FAISSVectorStore()
         self.retriever = DocumentRetriever(self.provider, self.vectorstore)
+        self.cache = SQLiteCache(CACHE_DB_PATH)
         self.is_loaded = self.vectorstore.load()
 
         if self.is_loaded:
@@ -43,6 +48,18 @@ class RAGPipeline:
         top_k: int = TOP_K_RESULTS,
     ) -> Dict:
         history = history or []
+
+        # Повторный запрос (тот же текст) — из SQLite, без embed/FAISS/LLM
+        cached_answer = self.cache.get(user_query)
+        if cached_answer:
+            return {
+                "answer": cached_answer,
+                "context": "Из кэша",
+                "sources": ["Кэш (SQLite)"],
+                "model": "cache",
+                "from_cache": True,
+            }
+
         logger.info(f"Запрос: '{user_query[:50]}...' (история: {len(history)})")
 
         if not self.is_loaded:
@@ -51,6 +68,7 @@ class RAGPipeline:
                 "context": "",
                 "sources": [],
                 "model": self.provider.chat_model,
+                "from_cache": False,
             }
 
         context = self.retriever.retrieve_context(
@@ -62,21 +80,30 @@ class RAGPipeline:
 
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         if history:
-            recent = history[-20:] if len(history) > 20 else history
-            messages.extend(recent)
+            max_messages = MAX_HISTORY_LENGTH * 2
+            messages.extend(history[-max_messages:])
         messages.append({"role": "user", "content": prompt_with_context})
 
         try:
             answer = self.provider.chat_completion(messages)
         except Exception as e:
             logger.error(f"Ошибка генерации ответа: {e}")
-            answer = f"Ошибка при обращении к API: {e}"
+            return {
+                "answer": f"Ошибка при обращении к API: {e}",
+                "context": context,
+                "sources": sources,
+                "model": self.provider.chat_model,
+                "from_cache": False,
+            }
+
+        self.cache.set(user_query, answer)
 
         return {
             "answer": answer,
             "context": context,
             "sources": sources,
             "model": self.provider.chat_model,
+            "from_cache": False,
         }
 
     def index_documents(self, documents: List[str], sources: List[str]) -> bool:
@@ -99,6 +126,7 @@ class RAGPipeline:
             "is_loaded": self.is_loaded,
             "provider": self.provider.name,
             **self.provider.get_info(),
+            **self.cache.get_stats(),
         })
         if hasattr(self.provider, "api_url_display"):
             stats["api_url"] = self.provider.api_url_display

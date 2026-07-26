@@ -16,6 +16,9 @@ PROJECT_ROOT = BASE_DIR.parent
 load_dotenv(BASE_DIR / ".env")
 load_dotenv(PROJECT_ROOT / ".env")
 
+# ========== КЭШ (SQLite) ==========
+CACHE_DB_PATH = PROJECT_ROOT / "data" / "cache.db"
+
 # ========== ПРОВАЙДЕР LLM ==========
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "proxy").lower()
 if LLM_PROVIDER not in ("proxy", "gigachat"):
