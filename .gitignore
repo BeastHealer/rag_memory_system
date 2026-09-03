@@ -1,0 +1,82 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+!example.env
+
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# FAISS indexes and metadata
+*.faiss
+index_*.faiss
+metadata.json
+metadata_*.json
+
+# Logs
+*.log
+logs/
+
+# SQLite cache (created at runtime)
+data/cache.db
+*.db
+
+# Temporary files
+*.tmp
+*.bak
+*.cache
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Логи и локальные базы данных
+*.log
+data/logs.db
+data/logs.csv
+data/cache.db
+*.faiss
+metadata_*.json
