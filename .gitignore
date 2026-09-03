@@ -73,3 +73,10 @@ htmlcov/
 .dmypy.json
 dmypy.json
 
+# Логи и локальные базы данных
+*.log
+data/logs.db
+data/logs.csv
+data/cache.db
+*.faiss
+metadata_*.json

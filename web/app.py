@@ -2,13 +2,14 @@
 Веб-приложение RAG-бота — диалоговый интерфейс.
 """
 
+import time
 import logging
 import uuid
 from pathlib import Path
 from typing import Dict, List
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -21,8 +22,11 @@ from config import (
     MAX_HISTORY_LENGTH,
     HOST,
     PORT,
+    LOGS_DB_PATH,
+    LOGS_CSV_PATH,
 )
 from rag.pipeline import RAGPipeline
+from db_logger import DatabaseLogger
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL),
@@ -32,6 +36,7 @@ logging.basicConfig(
         logging.StreamHandler(),
     ],
 )
+
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -41,6 +46,7 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 rag_pipeline = RAGPipeline()
+logger_db = DatabaseLogger(db_path=str(LOGS_DB_PATH))
 conversation_history: Dict[str, List[dict]] = {}
 
 
@@ -180,22 +186,47 @@ async def chat(req: ChatRequest):
 
     session_id = get_or_create_session(req.session_id)
     history = conversation_history[session_id]
+    query = req.message.strip()
 
-    result = rag_pipeline.query_with_history(req.message.strip(), history)
+    start_time = time.time()
+    try:
+        result = rag_pipeline.query_with_history(query, history)
+    except Exception as e:
+        logger.exception("Ошибка обработки запроса")
+        result = {
+            "answer": f"Ошибка при обработке запроса: {e}",
+            "sources": [],
+            "model": "error",
+            "from_cache": False,
+        }
+    response_time_ms = int((time.time() - start_time) * 1000)
 
-    history.append({"role": "user", "content": req.message.strip()})
+    history.append({"role": "user", "content": query})
     history.append({"role": "assistant", "content": result["answer"]})
 
-    max_messages = MAX_HISTORY_LENGTH * 2  # до 10 пар = 20 сообщений
+    max_messages = MAX_HISTORY_LENGTH * 2
     if len(history) > max_messages:
         conversation_history[session_id] = history[-max_messages:]
 
+    sources = result.get("sources", [])
+    source_str = ", ".join(sources) if isinstance(sources, list) else str(sources or "Unknown")
+
+    logger_db.log_interaction(
+        query=query,
+        response=result["answer"],
+        source=source_str,
+        session_id=session_id,
+        from_cache=result.get("from_cache", False),
+        response_time_ms=response_time_ms,
+    )
+
     return {
         "answer": result["answer"],
-        "sources": result["sources"],
+        "sources": sources,
         "session_id": session_id,
-        "model": result["model"],
+        "model": result.get("model"),
         "from_cache": result.get("from_cache", False),
+        "response_time_ms": response_time_ms,
     }
 
 
@@ -240,6 +271,27 @@ async def stats():
 async def test_connection():
     ok = rag_pipeline.test_connection()
     return {"ok": ok, "provider": LLM_PROVIDER}
+
+
+@app.get("/api/logs/stats")
+async def log_stats():
+    """Возвращает метрики логирования для мониторинга."""
+    try:
+        return logger_db.get_stats()
+    except Exception as e:
+        logger.error(f"Ошибка чтения статистики логов: {e}")
+        return JSONResponse({"error": "Не удалось получить статистику логов"}, status_code=500)
+
+
+@app.get("/api/logs/export")
+async def export_logs():
+    """Скачивает CSV-файл с логами для анализа."""
+    try:
+        logger_db.export_to_csv(str(LOGS_CSV_PATH))
+    except Exception as e:
+        logger.error(f"Ошибка экспорта логов: {e}")
+        return JSONResponse({"error": "Не удалось выгрузить логи"}, status_code=500)
+    return FileResponse(str(LOGS_CSV_PATH), media_type="text/csv", filename="logs.csv")
 
 
 if __name__ == "__main__":
