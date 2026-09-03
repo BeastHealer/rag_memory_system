@@ -71,10 +71,9 @@ class RAGPipeline:
                 "from_cache": False,
             }
 
-        context = self.retriever.retrieve_context(
-            user_query, top_k=top_k, max_length=MAX_CONTEXT_LENGTH
-        )
-        sources = self.retriever.get_relevant_sources(user_query, top_k)
+        results = self.retriever.retrieve(user_query, top_k)
+        context = self.retriever.build_context(results, MAX_CONTEXT_LENGTH)
+        sources = self.retriever.sources_from_results(results)
 
         prompt_with_context = RAG_PROMPT_TEMPLATE.format(context=context, query=user_query)
 

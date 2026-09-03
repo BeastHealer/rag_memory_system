@@ -19,6 +19,10 @@ load_dotenv(PROJECT_ROOT / ".env")
 # ========== КЭШ (SQLite) ==========
 CACHE_DB_PATH = PROJECT_ROOT / "data" / "cache.db"
 
+# ========== ЛОГИ ВЗАИМОДЕЙСТВИЙ (SQLite) ==========
+LOGS_DB_PATH = PROJECT_ROOT / "data" / "logs.db"
+LOGS_CSV_PATH = PROJECT_ROOT / "data" / "logs.csv"
+
 # ========== ПРОВАЙДЕР LLM ==========
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "proxy").lower()
 if LLM_PROVIDER not in ("proxy", "gigachat"):

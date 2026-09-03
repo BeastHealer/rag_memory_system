@@ -30,7 +30,13 @@ class DocumentRetriever:
         max_length: int = MAX_CONTEXT_LENGTH,
     ) -> str:
         results = self.retrieve(query, top_k)
+        return self.build_context(results, max_length)
 
+    def build_context(
+        self,
+        results: List[Tuple[str, str, float]],
+        max_length: int = MAX_CONTEXT_LENGTH,
+    ) -> str:
         if not results:
             return "Релевантная информация не найдена в базе знаний."
 
@@ -51,4 +57,8 @@ class DocumentRetriever:
 
     def get_relevant_sources(self, query: str, top_k: int = TOP_K_RESULTS) -> List[str]:
         results = self.retrieve(query, top_k)
-        return list({source for _, source, _ in results})
+        return self.sources_from_results(results)
+
+    @staticmethod
+    def sources_from_results(results: List[Tuple[str, str, float]]) -> List[str]:
+        return list(dict.fromkeys(source for _, source, _ in results))
